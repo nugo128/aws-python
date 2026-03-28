@@ -1,8 +1,11 @@
 from urllib.request import urlopen
+import os
 import io
+import mimetypes
 from hashlib import md5
 from time import localtime
 from botocore.exceptions import ClientError
+from boto3.s3.transfer import TransferConfig
 
 
 def get_objects(aws_s3_client, bucket_name):
@@ -44,12 +47,54 @@ def download_file_and_upload_to_s3(
         return f"https://{bucket_name}.s3.{region}.amazonaws.com/{file_name}"
 
 
-def upload_file(aws_s3_client, filename, bucket_name):
-    response = aws_s3_client.upload_file(filename, bucket_name, "hello.txt")
-    status_code = response["ResponseMetadata"]["HTTPStatusCode"]
-    if status_code == 200:
-        return True
-    return False
+def validate_mimetype(filename, allowed_types=None):
+    mime_type, _ = mimetypes.guess_type(filename)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+    if allowed_types and mime_type not in allowed_types:
+        raise ValueError(
+            f"File type '{mime_type}' is not allowed. Allowed types: {allowed_types}"
+        )
+    return mime_type
+
+
+def upload_file(aws_s3_client, filename, bucket_name, validate_mime=False):
+    key = os.path.basename(filename)
+    extra_args = {}
+    if validate_mime:
+        mime_type = validate_mimetype(filename)
+        extra_args["ContentType"] = mime_type
+        print(f"Detected MIME type: {mime_type}")
+    aws_s3_client.upload_file(filename, bucket_name, key, ExtraArgs=extra_args or None)
+    print(f"Uploaded '{filename}' as '{key}' to bucket '{bucket_name}'")
+    return True
+
+
+def upload_file_multipart(aws_s3_client, filename, bucket_name, validate_mime=False):
+    key = os.path.basename(filename)
+    file_size = os.path.getsize(filename)
+
+    extra_args = {}
+    if validate_mime:
+        mime_type = validate_mimetype(filename)
+        extra_args["ContentType"] = mime_type
+        print(f"Detected MIME type: {mime_type}")
+
+    # Multipart config: 25MB chunk size, 10 concurrent threads
+    config = TransferConfig(
+        multipart_threshold=25 * 1024 * 1024,
+        multipart_chunksize=25 * 1024 * 1024,
+        max_concurrency=10,
+    )
+
+    print(f"Uploading '{filename}' ({file_size} bytes) using multipart upload...")
+    aws_s3_client.upload_file(
+        filename, bucket_name, key,
+        ExtraArgs=extra_args or None,
+        Config=config,
+    )
+    print(f"Uploaded '{filename}' as '{key}' to bucket '{bucket_name}'")
+    return True
 
 
 def upload_file_obj(aws_s3_client, filename, bucket_name):

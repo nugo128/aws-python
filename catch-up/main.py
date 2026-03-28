@@ -3,7 +3,8 @@ from botocore.exceptions import ClientError
 from auth import init_client
 from bucket.crud import list_buckets, create_bucket, delete_bucket, bucket_exists
 from bucket.policy import read_bucket_policy, assign_policy, disable_public_access_block
-from object.crud import download_file_and_upload_to_s3, get_objects, upload_file
+from object.crud import download_file_and_upload_to_s3, get_objects, upload_file, upload_file_multipart
+from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
 import argparse
 
@@ -185,10 +186,30 @@ parser.add_argument(
     "-uf",
     "--upload_file",
     type=str,
-    help="Upload file",
-    nargs="?",
-    const="True",
-    default="False",
+    help="Upload a small file to the bucket. Pass file path.",
+    default=None,
+)
+
+parser.add_argument(
+    "-ufm",
+    "--upload_file_multipart",
+    type=str,
+    help="Upload a large file using multipart upload. Pass file path.",
+    default=None,
+)
+
+parser.add_argument(
+    "-mv",
+    "--mime_validation",
+    help="Enable mimetype validation during upload.",
+    action="store_true",
+)
+
+parser.add_argument(
+    "-lp",
+    "--lifecycle_policy",
+    help="Set lifecycle policy to delete objects after 120 days.",
+    action="store_true",
 )
 
 parser.add_argument(
@@ -258,8 +279,14 @@ def main():
         if args.list_objects == "True":
             get_objects(s3_client, args.bucket_name)
 
-        if args.upload_file == "True":
-            upload_file(s3_client, args.upload_file, args.bucket_name)
+        if args.upload_file:
+            upload_file(s3_client, args.upload_file, args.bucket_name, validate_mime=args.mime_validation)
+
+        if args.upload_file_multipart:
+            upload_file_multipart(s3_client, args.upload_file_multipart, args.bucket_name, validate_mime=args.mime_validation)
+
+        if args.lifecycle_policy:
+            set_lifecycle_policy(s3_client, args.bucket_name)
 
     if args.list_buckets:
         buckets = list_buckets(s3_client)
