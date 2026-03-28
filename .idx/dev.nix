@@ -5,6 +5,10 @@
   channel = "stable-24.05"; # or "unstable"
   # Use https://search.nixos.org/packages to find packages
   packages = [
+    pkgs.python310
+    pkgs.python310Packages.pip
+    pkgs.poetry 
+    
     # pkgs.go
     # pkgs.python311
     # pkgs.python311Packages.pip
@@ -18,10 +22,11 @@
     extensions = [
       # "vscodevim.vim"
       "google.gemini-cli-vscode-ide-companion"
+      "ms-python.python"
     ];
     # Enable previews
     previews = {
-      enable = true;
+      enable = true; 
       previews = {
         # web = {
         #   # Example: run "npm run dev" with PORT set to IDX's defined port for previews,
