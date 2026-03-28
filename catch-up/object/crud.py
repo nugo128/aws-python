@@ -97,6 +97,15 @@ def upload_file_multipart(aws_s3_client, filename, bucket_name, validate_mime=Fa
     return True
 
 
+def delete_object(aws_s3_client, bucket_name, key):
+    response = aws_s3_client.delete_object(Bucket=bucket_name, Key=key)
+    status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+    if status_code == 204:
+        print(f"Deleted '{key}' from bucket '{bucket_name}'")
+        return True
+    return False
+
+
 def upload_file_obj(aws_s3_client, filename, bucket_name):
     with open(filename, "rb") as file:
         aws_s3_client.upload_fileobj(file, bucket_name, "hello_obj.txt")

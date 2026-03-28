@@ -3,7 +3,7 @@ from botocore.exceptions import ClientError
 from auth import init_client
 from bucket.crud import list_buckets, create_bucket, delete_bucket, bucket_exists
 from bucket.policy import read_bucket_policy, assign_policy, disable_public_access_block
-from object.crud import download_file_and_upload_to_s3, get_objects, upload_file, upload_file_multipart
+from object.crud import download_file_and_upload_to_s3, get_objects, upload_file, upload_file_multipart, delete_object
 from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
 import argparse
@@ -213,6 +213,21 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "-del",
+    "--delete_object",
+    help="Delete a specific object from the bucket.",
+    action="store_true",
+)
+
+parser.add_argument(
+    "-key",
+    "--object_key",
+    type=str,
+    help="Object key (file name) in the bucket.",
+    default=None,
+)
+
+parser.add_argument(
     "-dpab",
     "--disable_public_access_block",
     type=str,
@@ -287,6 +302,11 @@ def main():
 
         if args.lifecycle_policy:
             set_lifecycle_policy(s3_client, args.bucket_name)
+
+        if args.delete_object:
+            if not args.object_key:
+                parser.error("Please provide object key with -key OBJECT_KEY")
+            delete_object(s3_client, args.bucket_name, args.object_key)
 
     if args.list_buckets:
         buckets = list_buckets(s3_client)
