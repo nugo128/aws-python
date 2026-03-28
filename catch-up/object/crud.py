@@ -106,6 +106,39 @@ def delete_object(aws_s3_client, bucket_name, key):
     return False
 
 
+def get_versioning_status(aws_s3_client, bucket_name):
+    response = aws_s3_client.get_bucket_versioning(Bucket=bucket_name)
+    status = response.get("Status", "Disabled")
+    print(f"Versioning for '{bucket_name}': {status}")
+    return status
+
+
+def list_object_versions(aws_s3_client, bucket_name, key):
+    response = aws_s3_client.list_object_versions(Bucket=bucket_name, Prefix=key)
+    versions = [v for v in response.get("Versions", []) if v["Key"] == key]
+    if not versions:
+        print(f"No versions found for '{key}' in bucket '{bucket_name}'")
+        return []
+    print(f"Found {len(versions)} version(s) for '{key}':")
+    for v in versions:
+        print(f"  VersionId: {v['VersionId']}, LastModified: {v['LastModified']}, IsLatest: {v['IsLatest']}")
+    return versions
+
+
+def restore_previous_version(aws_s3_client, bucket_name, key):
+    versions = list_object_versions(aws_s3_client, bucket_name, key)
+    if len(versions) < 2:
+        print("No previous version available to restore.")
+        return False
+    previous_version = versions[1]
+    prev_id = previous_version["VersionId"]
+    print(f"Restoring version '{prev_id}' as new latest version...")
+    response = aws_s3_client.get_object(Bucket=bucket_name, Key=key, VersionId=prev_id)
+    aws_s3_client.put_object(Bucket=bucket_name, Key=key, Body=response["Body"].read())
+    print(f"Restored '{key}' to previous version (VersionId: {prev_id})")
+    return True
+
+
 def upload_file_obj(aws_s3_client, filename, bucket_name):
     with open(filename, "rb") as file:
         aws_s3_client.upload_fileobj(file, bucket_name, "hello_obj.txt")

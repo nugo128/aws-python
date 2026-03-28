@@ -3,7 +3,11 @@ from botocore.exceptions import ClientError
 from auth import init_client
 from bucket.crud import list_buckets, create_bucket, delete_bucket, bucket_exists
 from bucket.policy import read_bucket_policy, assign_policy, disable_public_access_block
-from object.crud import download_file_and_upload_to_s3, get_objects, upload_file, upload_file_multipart, delete_object
+from object.crud import (
+    download_file_and_upload_to_s3, get_objects, upload_file,
+    upload_file_multipart, delete_object, get_versioning_status,
+    list_object_versions, restore_previous_version,
+)
 from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
 import argparse
@@ -228,6 +232,27 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "-vs",
+    "--versioning_status",
+    help="Check if versioning is enabled on the bucket.",
+    action="store_true",
+)
+
+parser.add_argument(
+    "-lv",
+    "--list_versions",
+    help="List all versions of a file. Requires -key.",
+    action="store_true",
+)
+
+parser.add_argument(
+    "-rv",
+    "--restore_version",
+    help="Restore the previous version of a file as the new latest. Requires -key.",
+    action="store_true",
+)
+
+parser.add_argument(
     "-dpab",
     "--disable_public_access_block",
     type=str,
@@ -307,6 +332,19 @@ def main():
             if not args.object_key:
                 parser.error("Please provide object key with -key OBJECT_KEY")
             delete_object(s3_client, args.bucket_name, args.object_key)
+
+        if args.versioning_status:
+            get_versioning_status(s3_client, args.bucket_name)
+
+        if args.list_versions:
+            if not args.object_key:
+                parser.error("Please provide object key with -key OBJECT_KEY")
+            list_object_versions(s3_client, args.bucket_name, args.object_key)
+
+        if args.restore_version:
+            if not args.object_key:
+                parser.error("Please provide object key with -key OBJECT_KEY")
+            restore_previous_version(s3_client, args.bucket_name, args.object_key)
 
     if args.list_buckets:
         buckets = list_buckets(s3_client)
