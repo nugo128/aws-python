@@ -7,6 +7,7 @@ from object.crud import (
     download_file_and_upload_to_s3, get_objects, upload_file,
     upload_file_multipart, delete_object, get_versioning_status,
     list_object_versions, restore_previous_version, upload_file_by_type,
+    delete_old_versions,
 )
 from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
@@ -261,6 +262,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "-dov",
+    "--delete_old_versions",
+    nargs="+",
+    help="Delete all versions of the given object key(s) that are older than 6 months. Example: -dov file1.txt file2.pdf",
+    default=None,
+)
+
+parser.add_argument(
     "-dpab",
     "--disable_public_access_block",
     type=str,
@@ -356,6 +365,9 @@ def main():
             if not args.object_key:
                 parser.error("Please provide object key with -key OBJECT_KEY")
             restore_previous_version(s3_client, args.bucket_name, args.object_key)
+
+        if args.delete_old_versions:
+            delete_old_versions(s3_client, args.bucket_name, args.delete_old_versions)
 
     if args.list_buckets:
         buckets = list_buckets(s3_client)

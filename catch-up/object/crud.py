@@ -5,8 +5,20 @@ import mimetypes
 import magic
 from hashlib import md5
 from time import localtime
+from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 from boto3.s3.transfer import TransferConfig
+
+
+def _six_months_ago():
+    now = datetime.now(timezone.utc)
+    month = now.month - 6
+    year = now.year
+    if month <= 0:
+        month += 12
+        year -= 1
+    day = min(now.day, 28)
+    return now.replace(year=year, month=month, day=day)
 
 
 MIME_FOLDER_MAP = {
@@ -197,6 +209,59 @@ def restore_previous_version(aws_s3_client, bucket_name, key):
     aws_s3_client.put_object(Bucket=bucket_name, Key=key, Body=response["Body"].read())
     print(f"Restored '{key}' to previous version (VersionId: {prev_id})")
     return True
+
+
+def delete_old_versions(aws_s3_client, bucket_name, keys, cutoff=None):
+    """For each key, delete every version (and delete marker) older than the cutoff.
+
+    Defaults to removing versions created more than 6 months ago.
+    Returns a dict mapping key -> number of versions deleted.
+    """
+    if cutoff is None:
+        cutoff = _six_months_ago()
+
+    print(f"Cutoff: deleting versions older than {cutoff.isoformat()}")
+    results = {}
+
+    for key in keys:
+        paginator = aws_s3_client.get_paginator("list_object_versions")
+        to_delete = []
+
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=key):
+            for entry in page.get("Versions", []) + page.get("DeleteMarkers", []):
+                if entry["Key"] != key:
+                    continue
+                if entry["LastModified"] < cutoff:
+                    to_delete.append(
+                        {"Key": entry["Key"], "VersionId": entry["VersionId"]}
+                    )
+
+        if not to_delete:
+            print(f"  '{key}': no versions older than cutoff.")
+            results[key] = 0
+            continue
+
+        print(f"  '{key}': deleting {len(to_delete)} old version(s)...")
+        for v in to_delete:
+            print(f"    - VersionId: {v['VersionId']}")
+
+        # S3 DeleteObjects supports up to 1000 at a time
+        deleted = 0
+        for i in range(0, len(to_delete), 1000):
+            chunk = to_delete[i : i + 1000]
+            response = aws_s3_client.delete_objects(
+                Bucket=bucket_name,
+                Delete={"Objects": chunk, "Quiet": True},
+            )
+            errors = response.get("Errors", [])
+            deleted += len(chunk) - len(errors)
+            for err in errors:
+                print(f"    ! failed {err.get('Key')}@{err.get('VersionId')}: {err.get('Message')}")
+
+        print(f"  '{key}': deleted {deleted} version(s).")
+        results[key] = deleted
+
+    return results
 
 
 def upload_file_obj(aws_s3_client, filename, bucket_name):
