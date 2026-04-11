@@ -2,7 +2,6 @@ from urllib.request import urlopen
 import os
 import io
 import mimetypes
-import magic
 from hashlib import md5
 from time import localtime
 from datetime import datetime, timezone
@@ -45,6 +44,7 @@ MIME_FOLDER_MAP = {
 
 def detect_mime_type(filename):
     """Detect MIME type of a file using python-magic (reads file header bytes)."""
+    import magic
     mime = magic.Magic(mime=True)
     return mime.from_file(filename)
 
