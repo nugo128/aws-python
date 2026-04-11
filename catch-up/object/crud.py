@@ -2,10 +2,70 @@ from urllib.request import urlopen
 import os
 import io
 import mimetypes
+import magic
 from hashlib import md5
 from time import localtime
 from botocore.exceptions import ClientError
 from boto3.s3.transfer import TransferConfig
+
+
+MIME_FOLDER_MAP = {
+    "image": "images",
+    "video": "videos",
+    "audio": "audio",
+    "text": "text",
+    "application/pdf": "documents",
+    "application/zip": "archives",
+    "application/x-tar": "archives",
+    "application/x-7z-compressed": "archives",
+    "application/x-rar-compressed": "archives",
+    "application/gzip": "archives",
+    "application/json": "data",
+    "application/xml": "data",
+    "application/msword": "documents",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "documents",
+    "application/vnd.ms-excel": "documents",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "documents",
+    "application/vnd.ms-powerpoint": "documents",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "documents",
+}
+
+
+def detect_mime_type(filename):
+    """Detect MIME type of a file using python-magic (reads file header bytes)."""
+    mime = magic.Magic(mime=True)
+    return mime.from_file(filename)
+
+
+def folder_for_mime(mime_type):
+    """Map a MIME type to an S3 folder name."""
+    if mime_type in MIME_FOLDER_MAP:
+        return MIME_FOLDER_MAP[mime_type]
+    top_level = mime_type.split("/", 1)[0]
+    return MIME_FOLDER_MAP.get(top_level, "other")
+
+
+def upload_file_by_type(aws_s3_client, filename, bucket_name):
+    """Upload any file to a folder in the bucket chosen by the file's detected MIME type."""
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(f"File not found: {filename}")
+
+    mime_type = detect_mime_type(filename)
+    folder = folder_for_mime(mime_type)
+    key = f"{folder}/{os.path.basename(filename)}"
+
+    print(f"Detected MIME type: {mime_type}")
+    print(f"Target folder: {folder}/")
+    print(f"Uploading '{filename}' to 's3://{bucket_name}/{key}'...")
+
+    aws_s3_client.upload_file(
+        filename,
+        bucket_name,
+        key,
+        ExtraArgs={"ContentType": mime_type},
+    )
+    print(f"Uploaded '{filename}' as '{key}' to bucket '{bucket_name}'")
+    return key
 
 
 def get_objects(aws_s3_client, bucket_name):

@@ -15,6 +15,7 @@ boto3 = "^1.26.99"
 botocore = "^1.29.99"
 python-dotenv = "^1.0.0"
 load-dotenv = "^0.1.0"
+python-magic = "^0.4.27"
 
 [tool.poetry.group.dev.dependencies]
 debugpy = "^1.6.2"

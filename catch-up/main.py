@@ -6,7 +6,7 @@ from bucket.policy import read_bucket_policy, assign_policy, disable_public_acce
 from object.crud import (
     download_file_and_upload_to_s3, get_objects, upload_file,
     upload_file_multipart, delete_object, get_versioning_status,
-    list_object_versions, restore_previous_version,
+    list_object_versions, restore_previous_version, upload_file_by_type,
 )
 from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
@@ -203,6 +203,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "-uft",
+    "--upload_file_typed",
+    type=str,
+    help="Upload a file to a bucket folder chosen by python-magic detected MIME type. Pass file path.",
+    default=None,
+)
+
+parser.add_argument(
     "-mv",
     "--mime_validation",
     help="Enable mimetype validation during upload.",
@@ -324,6 +332,9 @@ def main():
 
         if args.upload_file_multipart:
             upload_file_multipart(s3_client, args.upload_file_multipart, args.bucket_name, validate_mime=args.mime_validation)
+
+        if args.upload_file_typed:
+            upload_file_by_type(s3_client, args.upload_file_typed, args.bucket_name)
 
         if args.lifecycle_policy:
             set_lifecycle_policy(s3_client, args.bucket_name)
