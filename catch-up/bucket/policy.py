@@ -69,3 +69,18 @@ def read_bucket_policy(aws_s3_client, bucket_name):
 def disable_public_access_block(aws_s3_client, bucket_name):
     aws_s3_client.delete_public_access_block(Bucket=bucket_name)
     print("Public access block disabled")
+
+
+def enable_static_website(aws_s3_client, bucket_name, index_document="index.html", error_document="index.html"):
+    aws_s3_client.put_bucket_website(
+        Bucket=bucket_name,
+        WebsiteConfiguration={
+            "IndexDocument": {"Suffix": index_document},
+            "ErrorDocument": {"Key": error_document},
+        },
+    )
+    region = aws_s3_client.meta.region_name
+    endpoint = f"http://{bucket_name}.s3-website-{region}.amazonaws.com"
+    print(f"Static website hosting enabled for '{bucket_name}'")
+    print(f"Endpoint: {endpoint}")
+    return endpoint

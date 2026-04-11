@@ -2,12 +2,12 @@ import logging
 from botocore.exceptions import ClientError
 from auth import init_client
 from bucket.crud import list_buckets, create_bucket, delete_bucket, bucket_exists
-from bucket.policy import read_bucket_policy, assign_policy, disable_public_access_block
+from bucket.policy import read_bucket_policy, assign_policy, disable_public_access_block, enable_static_website
 from object.crud import (
     download_file_and_upload_to_s3, get_objects, upload_file,
     upload_file_multipart, delete_object, get_versioning_status,
     list_object_versions, restore_previous_version, upload_file_by_type,
-    delete_old_versions,
+    delete_old_versions, upload_directory,
 )
 from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
@@ -262,6 +262,14 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "-host",
+    "--host_static",
+    type=str,
+    help="Host a static site on the bucket. Pass the local directory to upload (e.g. static-react/dist).",
+    default=None,
+)
+
+parser.add_argument(
     "-dov",
     "--delete_old_versions",
     nargs="+",
@@ -368,6 +376,16 @@ def main():
 
         if args.delete_old_versions:
             delete_old_versions(s3_client, args.bucket_name, args.delete_old_versions)
+
+        if args.host_static:
+            print(f"Preparing bucket '{args.bucket_name}' for static hosting...")
+            try:
+                disable_public_access_block(s3_client, args.bucket_name)
+            except ClientError as e:
+                print(f"  (public access block already disabled: {e.response['Error']['Code']})")
+            assign_policy(s3_client, "public_read_policy", args.bucket_name)
+            upload_directory(s3_client, args.host_static, args.bucket_name)
+            enable_static_website(s3_client, args.bucket_name)
 
     if args.list_buckets:
         buckets = list_buckets(s3_client)

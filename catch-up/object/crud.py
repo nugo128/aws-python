@@ -57,6 +57,43 @@ def folder_for_mime(mime_type):
     return MIME_FOLDER_MAP.get(top_level, "other")
 
 
+def upload_directory(aws_s3_client, directory, bucket_name, prefix=""):
+    """Recursively upload a directory to a bucket, preserving subpaths.
+
+    Detects ContentType per file via python-magic when available, otherwise
+    falls back to mimetypes.guess_type so that .html/.js/.css land with the
+    correct MIME even on systems without libmagic.
+    """
+    if not os.path.isdir(directory):
+        raise NotADirectoryError(f"Not a directory: {directory}")
+
+    uploaded = 0
+    for root, _dirs, files in os.walk(directory):
+        for name in files:
+            local_path = os.path.join(root, name)
+            rel_path = os.path.relpath(local_path, directory).replace(os.sep, "/")
+            key = f"{prefix.rstrip('/')}/{rel_path}" if prefix else rel_path
+
+            content_type, _ = mimetypes.guess_type(local_path)
+            if not content_type:
+                try:
+                    content_type = detect_mime_type(local_path)
+                except Exception:
+                    content_type = "application/octet-stream"
+
+            print(f"  uploading {rel_path} ({content_type})")
+            aws_s3_client.upload_file(
+                local_path,
+                bucket_name,
+                key,
+                ExtraArgs={"ContentType": content_type},
+            )
+            uploaded += 1
+
+    print(f"Uploaded {uploaded} file(s) from '{directory}' to bucket '{bucket_name}'")
+    return uploaded
+
+
 def upload_file_by_type(aws_s3_client, filename, bucket_name):
     """Upload any file to a folder in the bucket chosen by the file's detected MIME type."""
     if not os.path.isfile(filename):
