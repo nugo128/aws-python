@@ -11,6 +11,7 @@ from object.crud import (
 )
 from object.policy import set_lifecycle_policy
 from bucket.encryption import set_bucket_encryption, read_bucket_encryption
+from inspire import get_random_quote, get_quote_by_author, save_quote_to_s3
 import argparse
 
 parser = argparse.ArgumentParser(
@@ -278,6 +279,22 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--inspire",
+    type=str,
+    help="Get an inspiring quote. Pass author name to filter, or 'random' for any quote.",
+    nargs="?",
+    const="random",
+    default=None,
+)
+
+parser.add_argument(
+    "-save",
+    "--save_quote",
+    help="Save the inspire quote as .json to the bucket. Requires -bn.",
+    action="store_true",
+)
+
+parser.add_argument(
     "-dpab",
     "--disable_public_access_block",
     type=str,
@@ -386,6 +403,18 @@ def main():
             assign_policy(s3_client, "public_read_policy", args.bucket_name)
             upload_directory(s3_client, args.host_static, args.bucket_name)
             enable_static_website(s3_client, args.bucket_name)
+
+    if args.inspire is not None:
+        if args.inspire == "random":
+            quote = get_random_quote()
+        else:
+            quote = get_quote_by_author(args.inspire)
+        if quote:
+            print(f'\n  "{quote["content"]}"\n  — {quote["author"]}\n')
+            if args.save_quote:
+                if not args.bucket_name:
+                    parser.error("Please provide bucket name with -bn BUCKET_NAME to save quote")
+                save_quote_to_s3(s3_client, args.bucket_name, quote)
 
     if args.list_buckets:
         buckets = list_buckets(s3_client)
