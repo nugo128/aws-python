@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "serverless": "^3.30.1",
+    "serverless-finch": "^4.0.3"
+  },
+  "devDependencies": {
+    "serverless-lift": "^1.25.1"
+  }
+}

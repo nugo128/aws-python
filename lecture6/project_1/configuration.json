@@ -1,0 +1,7 @@
+{
+    "lambdaRole": "arn:aws:iam::319231157779:role/LabRole",
+    "lambdaLocation": "us-west-2",
+    "dynamoDBtable": "serverlessFORM",
+    "s3ForStaticRegion": "us-west-2",
+    "s3ForStaticBucket": "r-test-2-new-b"
+}

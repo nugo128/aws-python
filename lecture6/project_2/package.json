@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "serverless": "^3.30.1"
+  },
+  "name": "rekognition"
+}

@@ -1,0 +1,40 @@
+service: serverless-form
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: ${file(../configuration.json):lambdaLocation}
+
+functions:
+  serverlessForm:
+    handler: handler.lambda_handler
+    role: ${file(../configuration.json):lambdaRole}
+    environment:
+      DYNAMO_DB_TABLE: ${file(../configuration.json):dynamoDBtable}
+
+plugins:
+  - serverless-finch
+
+custom:
+  client:
+    bucketName: ${file(../configuration.json):s3ForStaticBucket}
+    distributionFolder: ../static-web
+    indexDocument: index.html
+    region: ${file(../configuration.json):s3ForStaticRegion}
+# resources:
+#   Resources:
+#     myTable:
+#       Type: AWS::DynamoDB::Table
+#         Properties:
+#         TableName: ${file(../configuration.json):dynamoDBtable}
+#         AttributeDefinitions:
+#           - AttributeName: id
+#             AttributeType: S
+#         KeySchema:
+#           - AttributeName: id
+#             KeyType: HASH
+#         ProvisionedThroughput:
+#           ReadCapacityUnits: 1
+#           WriteCapacityUnits: 1

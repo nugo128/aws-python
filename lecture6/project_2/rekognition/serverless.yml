@@ -1,0 +1,79 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+service: rekognition
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: ${file(../configuration.json):region}
+  environment:
+    DYNAMO_DB_TABLE: ${file(../configuration.json):dynamoDBtable}
+    REKOGNITION_SNS_TOPIC_ARN: ${self:custom.rekognitionSNSTopicArn}
+    REKOGNITION_ROLE_ARN: ${file(../configuration.json):lambdaRole}
+
+functions:
+  startProcessingMedia:
+    handler: handler.start_processing_media
+    role: ${file(../configuration.json):lambdaRole}
+    events:
+      - s3:
+          bucket: ${file(../configuration.json):s3BucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .mp4
+      - s3:
+          bucket: ${file(../configuration.json):s3BucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .jpeg
+      - s3:
+          bucket: ${file(../configuration.json):s3BucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .png
+
+  handleLabelDetection:
+    handler: handler.handle_label_detection
+    role: ${file(../configuration.json):lambdaRole}
+    events:
+      - sns: willNotifyWhenRekognitionDone    
+
+custom:
+  rekognitionSNSTopicArn:
+    Fn::Join:
+      - ':'
+      - - arn
+        - aws
+        - sns
+        - Ref: AWS::Region
+        - Ref: AWS::AccountId
+        - willNotifyWhenRekognitionDone
+
+resources:
+  Resources:
+    myTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${file(../configuration.json):dynamoDBtable}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1

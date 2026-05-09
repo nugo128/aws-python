@@ -1,0 +1,6 @@
+{
+"lambdaRole":"arn:aws:iam::598373074862:role/LabRole",
+"region": "us-west-2",
+"dynamoDBtable": "rekognitionAnalyzeDB",
+"s3BucketName": "rekognition-1-btu-79878798798779854654213"
+}
