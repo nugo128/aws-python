@@ -1,0 +1,5 @@
+downloaded_images/
+sample/
+*.zip
+.serverless/
+node_modules/

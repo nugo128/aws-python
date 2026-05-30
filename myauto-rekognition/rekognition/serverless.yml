@@ -1,0 +1,50 @@
+service: myauto-rekognition
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: ${file(./configuration.json):region}
+  environment:
+    DYNAMO_DB_TABLE: ${file(./configuration.json):dynamoDBtable}
+  # This AWS Academy / voclabs account cannot create IAM roles, so we reuse the
+  # pre-provisioned LabRole (it already allows S3 read, Rekognition, DynamoDB).
+  iam:
+    role: ${file(./configuration.json):lambdaRole}
+
+functions:
+  # Fires on every new .jpg/.jpeg/.png object in the bucket. Serverless creates
+  # the bucket and wires the three notification rules to this one function.
+  startProcessingMedia:
+    handler: handler.start_processing_media
+    events:
+      - s3:
+          bucket: ${file(./configuration.json):s3BucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .jpg
+      - s3:
+          bucket: ${file(./configuration.json):s3BucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .jpeg
+      - s3:
+          bucket: ${file(./configuration.json):s3BucketName}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .png
+
+resources:
+  Resources:
+    RekognitionAnalysesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${file(./configuration.json):dynamoDBtable}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH

@@ -1,0 +1,6 @@
+{
+  "region": "us-east-1",
+  "s3BucketName": "myauto-rekognition-730335270104",
+  "dynamoDBtable": "rekogintionAnalysesDB",
+  "lambdaRole": "arn:aws:iam::730335270104:role/LabRole"
+}
