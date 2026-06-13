@@ -14,6 +14,7 @@ The 'destroy' subcommand tears everything back down again.
 """
 
 import argparse
+import math
 import socket
 import sys
 import time
@@ -218,6 +219,80 @@ def try_mysql_login(host, port, user, password):
 
 
 # --------------------------------------------------------------------------- #
+# Grow storage / list DynamoDB tables / manual snapshot
+# --------------------------------------------------------------------------- #
+def grow_storage(rds, db_identifier, percent, apply_immediately):
+    """Increase the instance's allocated storage by `percent` (default 25%)."""
+    try:
+        inst = rds.describe_db_instances(
+            DBInstanceIdentifier=db_identifier
+        )["DBInstances"][0]
+    except ClientError as e:
+        aws_fail(f"describing RDS instance '{db_identifier}'", e)
+
+    current = inst["AllocatedStorage"]
+    # Round up so the result is always a real increase (RDS needs an integer).
+    new_storage = math.ceil(current * (1 + percent / 100))
+    if new_storage <= current:
+        new_storage = current + 1
+    print(f"  Current storage: {current} GB")
+    print(f"  New storage:     {new_storage} GB (+{percent}%)")
+
+    try:
+        rds.modify_db_instance(
+            DBInstanceIdentifier=db_identifier,
+            AllocatedStorage=new_storage,
+            ApplyImmediately=apply_immediately,
+        )
+    except ClientError as e:
+        aws_fail(f"modifying storage for '{db_identifier}'", e)
+    when = "immediately" if apply_immediately else "in the next maintenance window"
+    print(f"  Modify requested ({when}). Storage scaling runs in the background.")
+
+
+def list_dynamodb_tables(dynamodb):
+    """Print every DynamoDB table name in the region (paginated)."""
+    names = []
+    try:
+        paginator = dynamodb.get_paginator("list_tables")
+        for page in paginator.paginate():
+            names.extend(page["TableNames"])
+    except ClientError as e:
+        aws_fail("listing DynamoDB tables", e)
+
+    if not names:
+        print("  (no DynamoDB tables in this region)")
+        return names
+    print(f"  {len(names)} DynamoDB table(s):")
+    for name in names:
+        print(f"    - {name}")
+    return names
+
+
+def create_snapshot(rds, db_identifier, snapshot_id, wait):
+    """Create a manual DB snapshot and optionally wait until it is available."""
+    try:
+        rds.create_db_snapshot(
+            DBInstanceIdentifier=db_identifier,
+            DBSnapshotIdentifier=snapshot_id,
+        )
+    except ClientError as e:
+        aws_fail(f"creating snapshot '{snapshot_id}'", e)
+    print(f"  Snapshot:  {snapshot_id} (manual) creating from {db_identifier}...")
+
+    if wait:
+        print("  Waiting for snapshot to become 'available'...")
+        try:
+            rds.get_waiter("db_snapshot_available").wait(
+                DBSnapshotIdentifier=snapshot_id,
+                WaiterConfig={"Delay": 15, "MaxAttempts": 80},
+            )
+        except ClientError as e:
+            aws_fail("waiting for the snapshot", e)
+        print("  Snapshot available.")
+
+
+# --------------------------------------------------------------------------- #
 # Destroy
 # --------------------------------------------------------------------------- #
 def destroy(rds, ec2, db_identifier, sg_id, subnet_group):
@@ -291,6 +366,24 @@ def main():
     c.add_argument("--port-timeout", type=int, default=300,
                    help="Seconds to wait for the DB port (default: 300).")
 
+    g = sub.add_parser("grow-storage",
+                       help="Increase an instance's storage (default +25%%).")
+    g.add_argument("--db-identifier", required=True, help="RDS instance to modify.")
+    g.add_argument("--percent", type=float, default=25.0,
+                   help="Percent to grow storage by (default: 25).")
+    g.add_argument("--no-apply-immediately", action="store_true",
+                   help="Apply in the next maintenance window instead of now.")
+
+    t = sub.add_parser("list-tables",
+                       help="Print all DynamoDB tables in the region.")
+
+    s = sub.add_parser("snapshot", help="Create a manual RDS snapshot.")
+    s.add_argument("--db-identifier", required=True, help="RDS instance to back up.")
+    s.add_argument("--snapshot-id", required=True,
+                   help="Identifier for the manual snapshot.")
+    s.add_argument("--wait", action="store_true",
+                   help="Wait until the snapshot is 'available'.")
+
     d = sub.add_parser("destroy", help="Tear down resources created by 'create'.")
     d.add_argument("--db-identifier", help="RDS instance to delete.")
     d.add_argument("--security-group-id", help="Security group to delete.")
@@ -330,6 +423,19 @@ def main():
         print(f"  python main.py destroy --db-identifier {args.db_identifier} "
               f"--security-group-id {sg_id} "
               f"--subnet-group-name {subnet_group}")
+
+    elif args.action == "grow-storage":
+        print(f"Growing storage for {args.db_identifier}...")
+        grow_storage(rds, args.db_identifier, args.percent,
+                     apply_immediately=not args.no_apply_immediately)
+
+    elif args.action == "list-tables":
+        print(f"DynamoDB tables in {args.region or getenv('aws_region_name')}:")
+        list_dynamodb_tables(init_client("dynamodb", args.region))
+
+    elif args.action == "snapshot":
+        print(f"Creating manual snapshot of {args.db_identifier}...")
+        create_snapshot(rds, args.db_identifier, args.snapshot_id, args.wait)
 
     elif args.action == "destroy":
         destroy(rds, ec2, args.db_identifier, args.security_group_id,
